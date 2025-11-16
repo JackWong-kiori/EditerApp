@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Button, StyleSheet, Text, TextInput } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
 import Layout from '../components/node/layout';
+
 
 export default function Login() {
     const [inputText, setInputText] = useState('');
@@ -28,16 +29,18 @@ export default function Login() {
 
     return (
         <Layout>
-            <Text style={styles.fieldName}>您的暱稱</Text>
+            <Text style={styles.fieldName}>請輸入你的名字</Text>
             <TextInput
                 value={inputText}
                 style={styles.fieldValue}
-                placeholder='請輸入暱稱'
+                placeholder='請輸入名字'
                 onChangeText={handleInputText}
                 onSubmitEditing={handleEnter}
                 returnKeyType="done"
             />
-            <Button title="進入" onPress={handleEnter} />
+            <TouchableOpacity style={styles.button} onPress={handleEnter}>
+                <Text style={styles.buttonText}>進入</Text>
+            </TouchableOpacity>
         </Layout>
     );
 }
@@ -49,15 +52,36 @@ const styles = StyleSheet.create({
         paddingTop: 15,
     },
     fieldName: {
-        margin: 0,
+        marginTop: 50,
+        marginBottom: 30,
         padding: 0,
+        fontSize: 25,       // 調整文字大小，單位是 px
+        textAlign: 'center' // 文字置中
     },
     fieldValue: {
-        margin: 0,
-        padding: 0,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        paddingHorizontal: 5,
+        height: 50,            // 框框高度
+        borderWidth: 2,
+        borderColor: '#121212ff',
+        paddingHorizontal: 10, // 左右內距
+        paddingVertical: 10,   // 上下內距
         marginVertical: 10,
+        marginHorizontal: 50,
+        fontSize: 18,          // placeholder + 輸入文字大小
+        textAlign: 'left'    // 文字置中
+     },
+    // ===== 新增按鈕樣式 =====
+    button: {
+        backgroundColor: '#007AFF',  // 背景色
+        paddingVertical: 12,         // 上下內距
+        paddingHorizontal: 30,       // 左右內距
+        borderRadius: 8,             // 圓角
+        marginTop: 30,               // 與上方元素距離
+        alignItems: 'center',        // 文字置中
+        marginHorizontal: 50,
+    },
+    buttonText: {
+        color: 'white',              // 文字顏色
+        fontSize: 16,                // 文字大小
+        fontWeight: 'bold',          // 粗體
     }
 });

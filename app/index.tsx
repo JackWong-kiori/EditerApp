@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
 
+
+/* 主頁 */
 export default function Index() {
   const [ready, setReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
