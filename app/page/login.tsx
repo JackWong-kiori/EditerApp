@@ -20,7 +20,7 @@ export default function Login() {
 
         try {
             await AsyncStorage.setItem('nickname', inputText);
-            router.replace('./page/main');
+            router.replace('/page/main');
         } catch (e) {
             console.log('Failed to save nickname', e);
         }
