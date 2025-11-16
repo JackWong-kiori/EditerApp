@@ -1,0 +1,100 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { awareness, userID, ytext } from '../components/yjsSetup';
+
+interface CursorInfo {
+    start: number;
+    end: number;
+    color: string;
+    name: string;
+}
+
+export default function CollaborativeTextInput() {
+    const [text, setText] = useState('');
+    const [cursors, setCursors] = useState<{ [key: number]: CursorInfo }>({});
+    const inputRef = useRef<TextInput>(null);
+
+    // 同步文字
+    useEffect(() => {
+        const updateText = () => setText(ytext.toString());
+        ytext.observe(updateText);
+        updateText();
+
+        return () => {
+            ytext.unobserve(updateText);
+        };
+    }, []);
+
+    // 同步游標
+    useEffect(() => {
+        const onAwarenessChange = () => {
+            const newCursors: { [key: number]: CursorInfo } = {};
+            awareness.getStates().forEach((state: any, clientID: number) => {
+                if (clientID !== userID && state.cursor) {
+                    newCursors[clientID] = {
+                        start: state.cursor.start,
+                        end: state.cursor.end,
+                        color: state.user.color,
+                        name: state.user.name,
+                    };
+                }
+            });
+            setCursors(newCursors);
+        };
+
+        awareness.on('change', onAwarenessChange);
+        onAwarenessChange();
+
+        return () => {
+            awareness.off('change', onAwarenessChange);
+        };
+    }, []);
+
+    const onChangeText = (newText: string) => {
+        const oldText = ytext.toString();
+        ytext.delete(0, oldText.length);
+        ytext.insert(0, newText);
+        setText(newText);
+    };
+
+    const onSelectionChange = (e: any) => {
+        const { start, end } = e.nativeEvent.selection;
+        awareness.setLocalStateField('cursor', { start, end });
+    };
+
+    return (
+        <View style={styles.container}>
+            <TextInput
+                ref={inputRef}
+                style={styles.input}
+                multiline
+                value={text}
+                onChangeText={onChangeText}
+                onSelectionChange={onSelectionChange}
+                placeholder="Start typing..."
+            />
+            {/* 顯示其他用戶的光標位置 */}
+            {Object.entries(cursors).map(([clientID, cursor]) => {
+                // 簡單顯示成文字提示，未來可改成絕對定位的小線條
+                return (
+                    <Text key={clientID} style={[styles.cursor, { color: cursor.color }]}>
+                        {`${cursor.name} at ${cursor.start}`}
+                    </Text>
+                );
+            })}
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { padding: 16, flex: 1 },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        padding: 10,
+        minHeight: 150,
+        textAlignVertical: 'top',
+        fontSize: 16,
+    },
+    cursor: { marginTop: 4, fontWeight: 'bold' },
+});

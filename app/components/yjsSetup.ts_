@@ -1,0 +1,24 @@
+import { WebsocketProvider } from 'y-websocket';
+import * as Y from 'yjs';
+
+// 建立 Yjs 文檔
+export const ydoc = new Y.Doc();
+
+// WebSocket Provider
+export const provider = new WebsocketProvider('ws://192.168.0.198:1234', 'shared-room', ydoc);
+
+// Y.Text 用來同步文字
+export const ytext = ydoc.getText('shared-text');
+
+// Undo / Redo
+// export const undoManager = new Y.UndoManager(ytext);
+
+// Awareness 用來同步光標
+export const awareness = provider.awareness;
+
+// 每個用戶唯一 ID 和顏色
+export const userID = Math.floor(Math.random() * 10000);
+export const userColor = `hsl(${Math.floor(Math.random() * 360)}, 80%, 50%)`;
+
+// 設定本地使用者狀態
+awareness.setLocalStateField('user', { id: userID, color: userColor, name: `User${userID}` });
