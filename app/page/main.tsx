@@ -4,56 +4,90 @@ import {
   Alert, FlatList, Modal, StyleSheet, Text, TextInput,
   TouchableOpacity, View
 } from "react-native";
+import { Customer, CustomerApiService } from "../api";
 import Layout from "../components/node/layout";
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 export default function Main() {
   const [nickname, setNickname] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [Customers, setCustomers] = useState<Customer[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
+  const [newCustomerName, setnewCustomerName] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('nickname')
-      .then(value => setNickname(value))
-      .catch(err => console.error("讀取暱稱失敗: ", err))
-      .finally(() => setLoading(false));
+    const fetchData = async () => {
+      setLoading(true);
+
+      try {
+        //名稱
+        const nickname = await AsyncStorage.getItem('nickname');
+        setNickname(nickname);
+
+        //客戶
+        const allCustomersJson = await AsyncStorage.getItem('allCustomers');
+        const allCustomers = JSON.parse(allCustomersJson ?? "[]");
+        setCustomers(allCustomers);
+
+        setLoading(false);
+
+        try {
+          const apiCustomers = await CustomerApiService.getApiCustomersGetAll();
+          setCustomers(apiCustomers);
+          await AsyncStorage.setItem('allCustomers', JSON.stringify(apiCustomers));
+        } catch (apiErr) {
+          console.warn("API 讀取失敗，使用本地資料", apiErr);
+        }
+      } catch (err) {
+        console.error("讀取本地資料失敗", err);
+        setLoading(false); // 出錯也關閉 loading
+      }
+    };
+
+    fetchData();
   }, []);
 
-  // 打開新增專案 Modal
+  // 打開新增客戶視窗
   const handleOpenModal = () => {
-    setNewProjectName('');
+    setnewCustomerName('');
     setModalVisible(true);
   };
 
   // 儲存並新增專案
-  const handleSaveNewProject = () => {
-    if (!newProjectName.trim()) {
+  const handleSaveNewCustomer = async () => {
+    if (!newCustomerName.trim()) {
       Alert.alert("請輸入專案名稱");
       return;
     }
+    setLoading(true);
 
-    const newProject: Project = {
-      id: projects.length + 1,
-      name: newProjectName.trim(),
-    };
-    setProjects(prev => [...prev, newProject]);
-    setModalVisible(false);
+    try {
+      const newCustomer: Customer = {
+        name: newCustomerName.trim(),
+      };
+      const result = await CustomerApiService.postApiCustomersCreateCustomer(newCustomer);
 
-    // 自動滾動到底
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+      // 更新客戶列表
+      setCustomers(prev => [...prev, result]);
+
+      // 關閉 modal
+      setModalVisible(false);
+
+      // 延遲滾動到底
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+    } catch (err) {
+      console.error("Create customer failed:", err);
+    } finally {
+      setLoading(false); // 不管成功或失敗都關閉 loading
+    }
   };
 
-  // 清空專案列表
-  const handleClearProjects = () => setProjects([]);
+  // TODO 要刪除的CODE 
+  // 清空客戶列表
+  const handleClearCustomers = () => setCustomers([]);
 
   if (loading) {
     return (
@@ -73,7 +107,8 @@ export default function Main() {
 
         <Text style={styles.title}>專案主頁</Text>
 
-        <TouchableOpacity style={styles.clearButton} onPress={handleClearProjects}>
+        {/* TODO 要刪除的CODE  */}
+        <TouchableOpacity style={styles.clearButton} onPress={handleClearCustomers}>
           <Text style={styles.clearButtonText}>清除</Text>
         </TouchableOpacity>
       </View>
@@ -81,11 +116,11 @@ export default function Main() {
       {/* 專案方格列表 */}
       <FlatList
         ref={flatListRef}
-        data={projects}
+        data={Customers}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.projectList}
+        contentContainerStyle={styles.customerList}
         renderItem={({ item }) => (
-          <View style={styles.projectBox}>
+          <View style={styles.customerBox}>
             <View style={styles.displayRow}>
               <Text style={styles.displayLabel}>專案名稱:</Text>
               <Text style={styles.displayName}>{item.name}</Text>
@@ -107,11 +142,11 @@ export default function Main() {
             <TextInput
               style={styles.modalInput}
               placeholder="請輸入專案名稱"
-              value={newProjectName}
-              onChangeText={setNewProjectName}
+              value={newCustomerName}
+              onChangeText={setnewCustomerName}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalButton} onPress={handleSaveNewProject}>
+              <TouchableOpacity style={styles.modalButton} onPress={handleSaveNewCustomer}>
                 <Text style={styles.modalButtonText}>儲存</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
@@ -159,6 +194,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
+  // TODO 要刪除的CODE
   clearButton: {
     backgroundColor: '#FF3B30',
     width: 80,
@@ -167,17 +203,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // TODO 要刪除的CODE
   clearButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
     textAlign: 'center',
   },
-  projectList: {
+  customerList: {
     paddingHorizontal: 20,
     paddingBottom: 50,
   },
-  projectBox: {
+  customerBox: {
     backgroundColor: '#e6f0ff',
     padding: 20,
     marginBottom: 20,
@@ -238,18 +275,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   displayRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-displayLabel: {
-  fontSize: 16,
-  fontWeight: '600',
-  marginRight: 2,
-  width: 70, // 固定寬度
-},
-displayName: {
-  fontSize: 16,
-  fontWeight: '500',
-  flex: 1,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  displayLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 2,
+    width: 70,
+  },
+  displayName: {
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+  },
 });
