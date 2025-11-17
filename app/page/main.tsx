@@ -4,8 +4,11 @@ import {
   Alert, FlatList, Modal, StyleSheet, Text, TextInput,
   TouchableOpacity, View
 } from "react-native";
-import { Customer, CustomerApiService } from "../api";
+import { Customer, CustomerApiService, CustomerDataItemsService } from "../api";
 import Layout from "../components/node/layout";
+import { safeApi, safeApiWithFallback } from "../components/utils/safeApi";
+
+const StoargeKey_AllCustomers = "all_customers";
 
 export default function Main() {
   const [nickname, setNickname] = useState<string | null>(null);
@@ -15,33 +18,85 @@ export default function Main() {
   const [newCustomerName, setnewCustomerName] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
+  // 先將本地的推上去，再把遠端的資料一起抓下來
+  const syncCustomers = async () => {
+    var local = Customers;
+
+    //若沒有資料嘗試取得本地的
+    if (local.length == 0) {
+      var json = await AsyncStorage.getItem(StoargeKey_AllCustomers);
+      local = JSON.parse(json ?? '[]');
+      setCustomers(customers => local);
+    }
+
+    const queue: Customer[] = local.filter((item) => item.id! < 0);
+
+    for (const item of queue) {
+      try {
+        const customer = await safeApi(
+          CustomerApiService.postApiCustomersCreateCustomer,
+          [{
+            name: item.name
+          }]
+        );
+
+        // 更新 UI（把負 ID 換成真 ID）
+        local = local.map(c => (c.id === item.id ? customer : c));
+      } catch (e) {
+        console.log("單筆同步失敗，保留於隊列");
+      }
+    }
+
+    setCustomers(() => {
+      AsyncStorage.setItem(StoargeKey_AllCustomers, JSON.stringify(local));
+      return local;
+    });
+
+    // 客戶清單資料
+    const apiCustomers = await safeApiWithFallback(
+      CustomerApiService.getApiCustomersGetAll,
+      [],
+      StoargeKey_AllCustomers
+    );
+
+    setCustomers(() => {
+      AsyncStorage.setItem(StoargeKey_AllCustomers, JSON.stringify(apiCustomers));
+      return apiCustomers;
+    });
+  };
+
+  //伺服器不斷確認同步
+  useEffect(() => {
+    let interval = setInterval(async () => {
+      try {
+        await safeApi(CustomerDataItemsService.getApiCustomerDataItemsCheck);
+        console.log("伺服器可用 → 嘗試同步");
+        await syncCustomers();
+      } catch (e) {
+        console.log("伺服器離線!!", e);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+
+  // 客戶清單載入
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
 
       try {
-        //名稱
+        // 登入者
         const nickname = await AsyncStorage.getItem('nickname');
         setNickname(nickname);
 
-        //客戶
-        const allCustomersJson = await AsyncStorage.getItem('allCustomers');
-        const allCustomers = JSON.parse(allCustomersJson ?? "[]");
-        setCustomers(allCustomers);
-
-        setLoading(false);
-
-        try {
-          const apiCustomers = await CustomerApiService.getApiCustomersGetAll();
-          setCustomers(apiCustomers);
-          await AsyncStorage.setItem('allCustomers', JSON.stringify(apiCustomers));
-        } catch (apiErr) {
-          console.warn("API 讀取失敗，使用本地資料", apiErr);
-        }
+        //同步 本地與遠端資料
+        await syncCustomers();
       } catch (err) {
-        console.error("讀取本地資料失敗", err);
-        setLoading(false); // 出錯也關閉 loading
+        console.error("資料讀取失敗", err);
       }
+      setLoading(false);
     };
 
     fetchData();
@@ -53,7 +108,7 @@ export default function Main() {
     setModalVisible(true);
   };
 
-  // 儲存並新增專案
+  // 儲存並新增客戶
   const handleSaveNewCustomer = async () => {
     if (!newCustomerName.trim()) {
       Alert.alert("請輸入專案名稱");
@@ -63,12 +118,34 @@ export default function Main() {
 
     try {
       const newCustomer: Customer = {
+        id: Date.now() * -1,
         name: newCustomerName.trim(),
       };
-      const result = await CustomerApiService.postApiCustomersCreateCustomer(newCustomer);
+
+      let savedCustomer = newCustomer;
+
+      try {
+        // 嘗試呼叫 API
+        const apiCustomer = await safeApi(
+          CustomerApiService.postApiCustomersCreateCustomer,
+          [{
+            name: newCustomer.name
+          }]
+        );
+
+        // 上傳成功
+        savedCustomer = apiCustomer;
+      } catch (err) {
+        console.log(err)
+      }
 
       // 更新客戶列表
-      setCustomers(prev => [...prev, result]);
+      setCustomers(customers => {
+        const list = [...customers, savedCustomer];
+        AsyncStorage.setItem(StoargeKey_AllCustomers, JSON.stringify(list));
+        return list;
+      });
+
 
       // 關閉 modal
       setModalVisible(false);
@@ -81,7 +158,7 @@ export default function Main() {
     } catch (err) {
       console.error("Create customer failed:", err);
     } finally {
-      setLoading(false); // 不管成功或失敗都關閉 loading
+      setLoading(false);
     }
   };
 
@@ -123,7 +200,10 @@ export default function Main() {
           <View style={styles.customerBox}>
             <View style={styles.displayRow}>
               <Text style={styles.displayLabel}>專案名稱:</Text>
-              <Text style={styles.displayName}>{item.name}</Text>
+              <Text style={styles.displayName}>
+                {item.name}
+                {item.id < 0 ? "（待同步）" : ""}
+              </Text>
             </View>
           </View>
         )}
